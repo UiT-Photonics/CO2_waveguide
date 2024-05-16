@@ -1,0 +1,22 @@
+import numpy as np
+from numpy import *
+import matplotlib.pyplot as plt
+import re
+
+f = genfromtxt("SiN_wg.dat", delimiter=",")
+plt.figure(dpi=300)
+plt.plot(f[:,0],f[:,1],'b-', label='waveguide')
+plt.plot(f[:,0],f[:,2:],'b-')
+plt.plot(f[:,0],f[:,0],'r-', label='light line')
+
+plt.xlabel("wavevector k_x (units of 2π/a)",size=14)
+plt.ylabel("frequency (units of 2πc/a)",size=14)
+plt.axis([0.48,0.5,0.48,0.51])
+plt.xticks([t for t in np.arange(0.48,0.501,0.05)], size = 12)
+plt.yticks([t for t in np.arange(0.48,0.501,0.05)], size = 12)
+
+om=2/4.345
+plt.axhline(y=om, color='y', linestyle='-', label='CO2')
+
+plt.legend(fancybox=True, framealpha=1, shadow=True, borderpad=1, loc='upper left',prop={'size': 9})
+plt.show()
