@@ -1,0 +1,378 @@
+import nazca as nd
+import numpy as np
+import math
+from nazca.interconnects import Interconnect
+import scipy.integrate as integrate
+import matplotlib.pyplot as plt
+import spiral_lib as spi
+
+#======================================================================
+# Generate spiral pattern
+#======================================================================
+
+#======================================================================
+# Archimedean spiral
+#======================================================================
+
+ROC = 3.2
+pitch = 0.8
+n_turns = 0.5
+
+# new instance of the Archimedean spiral
+arch = spi.Archimedes(ROC, pitch)
+
+
+
+#======================================================================
+# Central generalized clothoid
+#======================================================================
+
+# starting point
+(x0_in, y0_in) = (0, 0)
+
+# connection point
+th_inner_connect = arch.find_th_cond1() + arch.find_b_cond1()
+(x1_in, y1_in) = (arch.x(th_inner_connect), 0.5)
+k1_in = arch.kappa(th_inner_connect)
+dk1_in = arch.d_kappa(th_inner_connect)
+th1_in = arch.tg_angle(th_inner_connect)
+
+# new instance of a 3rd-order clothoid for the central S-bend
+cloth3 = spi.Clothoid_order3(x0_in, y0_in,
+                             x1_in, y1_in,
+                             k1_in, dk1_in, th1_in
+                             )
+# generate the etch holes; rectangular pattern
+def rectPattern(length, width):
+    holePattern = np.array([[-width/2.0, -length/2.0],
+                      [-width/2.0, length/2.0],
+                      [width/2.0, length/2.0],
+                      [width/2.0, -length/2.0]              
+                    ])
+    return holePattern
+
+
+
+# generate the etch holes, circular pattern
+def circPattern(radius):
+    holePattern = nd.geom.circle(radius=radius, N=32)
+    return holePattern
+
+
+
+# Place the wg element with/without holes
+def place(xWg, yWg, sWg, widthWg, pointsHole, layer1, layer2, \
+                  holeFlag, left, right, period, dist):
+    
+    #pointsWg = [(xWg[i]*1000, yWg[i]*1000) for i in range(np.shape(xWg)[0])]
+    #nd.Polyline(points=pointsWg, layer = layer1, width=widthWg).put()
+    
+    if (holeFlag == 1):
+        # new instance of holes
+        hol = spi.holes(xWg, yWg, sWg, period, dist)
+
+        hol.drill(0.0, 'Central')
+        
+        if (left == 1):
+            for i in range(hol.lx.shape[0]):
+                nd.Polygon(points = pointsHole, layer=layer1).\
+                put(hol.lx[i]*1000, hol.ly[i]*1000, hol.lth[i]*180/np.pi)
+        
+        if (right == 1):
+            for i in range(hol.rx.shape[0]):
+                nd.Polygon(points = pointsHole, layer=layer1).\
+                put(hol.rx[i]*1000, hol.ry[i]*1000, hol.rth[i]*180/np.pi)
+            
+                
+
+# create a parametrized building block 1
+def RibWgHole(xWg, yWg, sWg, widthWg=4.5, \
+              radius=1.55/2, period=2, dist=((math.sqrt(3))*2), holeFlag=1): # make changes here
+    with nd.Cell('spiralRib') as mycp:
+        Holes = circPattern(radius)
+
+        #place(xWg, yWg, sWg, widthWg, Holes, 'layer1', 'layer2', \
+                  #holeFlag, 1, 1, period, dist+((math.sqrt(3))*0))
+        
+        for f in range(1,9):
+            g=2*f
+            place(xWg, yWg, sWg, widthWg, Holes, 'layer1', 'layer2', \
+                  holeFlag, 1, 1, period, dist+((math.sqrt(3))*g))
+            f=f+1
+    return mycp
+
+
+# Place the wg element with/without holes
+def place1(xWg, yWg, sWg, widthWg, pointsHole, layer1, layer2, \
+                  holeFlag, left, right, period, dist):
+    
+    #pointsWg = [(xWg[i]*1000, yWg[i]*1000) for i in range(np.shape(xWg)[0])]
+    #nd.Polyline(points=pointsWg, layer = layer1, width=widthWg).put()
+    
+    if (holeFlag == 0):
+        # new instance of holes
+        hol = spi.holes(xWg, yWg, sWg, period, dist)
+
+        hol.drill(0.001,'Central')
+        
+        if (left == 0):
+            for i in range(hol.lx.shape[0]):
+                nd.Polygon(points = pointsHole, layer=layer2).\
+                put(hol.lx[i]*1000, hol.ly[i]*1000, hol.lth[i]*180/np.pi)
+        
+        if (right == 0):
+            for i in range(hol.rx.shape[0]):
+                nd.Polygon(points = pointsHole, layer=layer2).\
+                put(hol.rx[i]*1000, hol.ry[i]*1000, hol.rth[i]*180/np.pi)
+                
+
+# create a parametrized building block 2
+def RibWgHole1(xWg, yWg, sWg, widthWg=4.5, \
+              radius=1.55/2, period=2, dist=((math.sqrt(3))*2), holeFlag=0): # make changes here
+    with nd.Cell('spiralRib1') as mycp:
+        Holes = circPattern(radius)
+
+        ff=0
+        for ff in range (0,9):
+            gg=(2*ff)+1
+            place1(xWg, yWg, sWg, widthWg, Holes, 'layer1', 'layer2', \
+                  holeFlag, 0, 0, period, dist+((math.sqrt(3))*gg))
+            ff=ff+1
+    return mycp
+
+        
+# insert your initial estimates
+a3_in_est = 0.007
+s1_in_est = 7.5
+
+# author's note
+""" I found that the best practice to find the parameters estimates
+is by plotting x and y and just observing the resulting curve;
+Once you think it looks good, go for it. The script also appears
+to be sort of robust, so it partially corrects for your eventual
+inability to guess.
+
+This in fact leaves some space for further development; A GUI would be
+of quite some use later in order to ease up the examination. """
+# back to the business
+
+# solve for a3 and s1, then claculate the rest and print all...
+cloth3.solve_eq_xy(a3_in_est, s1_in_est)
+
+print("Here we have the parameters for the central S-bend clothoid:"
+      "\na1 = %s\na2 = %s\na3 = %s\nth0 = %s\ns1 = %s"
+      % (cloth3.a1, cloth3.a2, cloth3.a3, cloth3.th0, cloth3.s1)
+      )
+
+
+
+#======================================================================
+# Input/output generalized clothoid
+#======================================================================
+
+th_outer_connect = (th_inner_connect
+                    + n_turns * 2 * np.pi
+                    - (1/4.0) * np.pi
+                    )
+# starting point
+th0_out =  (1/2.0) * np.pi
+(x0_out, y0_out) = (arch.x(th_outer_connect + (1/4.0)*np.pi), -4.2)
+
+# conection point
+(x1_out, y1_out) = (arch.x(th_outer_connect), arch.y(th_outer_connect))
+k1_out = - arch.kappa(th_outer_connect)
+dk1_out = - arch.d_kappa(th_outer_connect)
+th1_out =  arch.tg_angle(th_outer_connect) - np.pi
+
+# new instance of a 4th-order clothoid for an adiabatic input/output connection
+cloth4 = spi.Clothoid_order4(x0_out, y0_out,
+                             x1_out, y1_out,
+                             k1_out, dk1_out, th1_out,
+                             th0_out
+                             )
+
+# insert your initial guesses - very important!
+a4_out_est = -0.00035
+s1_out_est = 7.3
+
+# solve for a4 and s1, then claculate the rest and print all...
+cloth4.solve_eq_xy(a4_out_est, s1_out_est)
+
+print("\nHere we have the parameters for the output clothoid:"
+      "\na1 = %s\na2 = %s\na3 = %s\na4 = %s\ns1 = %s"
+      % (cloth4.a1, cloth4.a2, cloth4.a3, cloth4.a4, cloth4.s1)
+      )
+
+
+
+#======================================================================
+# Input/output straight extensions
+#======================================================================
+
+l_ext = 1.8
+
+s_ext = np.linspace(0, l_ext, 2)
+
+x_ext = s_ext * np.cos(-th0_out) + x0_out
+y_ext = s_ext * np.sin(-th0_out) + y0_out
+
+
+
+#======================================================================
+# Input vectors for retrieving all the (x,y) coordinates
+#======================================================================
+
+s_in = np.linspace(0,
+                   cloth3.s1,
+                   1000
+                   )
+
+s_out = np.linspace(0,
+                    cloth4.s1,
+                    500
+                    )
+
+th = np.linspace(th_inner_connect,
+                 th_inner_connect + n_turns * 2 * np.pi - (1/4.0) * np.pi,
+                 500
+                 )
+
+# this is a good spot to include the overall rotation
+#spi.rot = np.pi / 2.0
+
+
+
+#======================================================================
+# Match curves and create a single one
+#======================================================================
+
+# new instance of curve
+crv = spi.curve(arch.x(th),
+                arch.y(th),
+                s_in[-1] + arch.s(th[0], th)
+                )
+
+# add the central clothoid
+crv.read_next(cloth3.x(s_in),
+              cloth3.y(s_in),
+              s_in)
+crv.match('First')
+crv.splice()
+
+# add the input/output clothoid
+crv.read_next(cloth4.x(s_out),
+              cloth4.y(s_out),
+              s_in[-1] + arch.s(th[0], th[-1]) + s_out
+              )
+crv.match('Last')
+crv.splice('Last')
+
+
+
+# add the input/output straight extensions
+crv.read_next(x_ext,
+              y_ext,
+              s_in[-1] + arch.s(th[0], th[-1]) + s_out[-1] + s_ext
+              )
+#crh.match('Last')
+crv.splice('Last')
+
+crv.mirror()
+
+length05t = spi.length(crv.x, crv.y)
+length05t = np.round((length05t/10.0-0.4), 2) # in cm with 2 decimals
+
+#======================================================================
+# Clone curve and create a new one
+#======================================================================
+# clone curve
+x, y, s = crv.clone(0)
+# new instance of curve
+crv2 = spi.curve(x, y, s)
+
+# clear out all cell references
+nd.clear_layout()
+# clear out layers from memory
+nd.clear_layers()
+# clear out xsections from memory
+nd.clear_xsections()
+
+# create a layer and define its accuracy
+nd.add_layer(name='layer0', layer=0, accuracy=0.001)
+nd.add_layer(name='layer1', layer=1, accuracy=0.001)
+nd.add_layer(name='layer2', layer=2, accuracy=0.001)
+
+circle = nd.Polygon(layer='layer0', points=nd.geom.ring(radius=50000, width=10, N=200))
+RibWgHole(crv.x, crv.y, crv.s, holeFlag = 1).put(0)
+RibWgHole1(crv2.x, crv2.y, crv2.s, holeFlag = 0).put(0)
+
+#RibWgHole(crv.x, crv.y, crv.s, holeFlag = 1).put(15000,0)
+#RibWgHole1(crv2.x, crv2.y, crv2.s, holeFlag = 0).put(15000,0)
+
+#======================================================================
+# Add straight waveguides
+#======================================================================
+# define the period in x and y
+a=2 # along the waveguide
+b=(math.sqrt(3))*a # across the waveguide
+#define the beginning of rows in x and y
+c=0 #beginning of the first hole column
+m=0.5 # beginning of the second column displaced by half a period (to form triangular lattice)
+#numbers of holes
+d=22 #no of holes from the first of the PhC on one side of the waveguide to first of the one on the other side
+s=4700 #no of holes between the beginnings of the PhC of 2 consecutive waveguides
+p=5498 #no of holes between the beginnings of two groups of waveguides with different d
+#sizes
+l=6000 #length in number of holes
+rr=1.55 #initial diameter
+#g=0 # waveguide cluster
+r=0 #step of increase of radius
+
+# define the hole
+def hole1(d=rr, points=50,layer=None):
+    hole_shape = nd.geometries.circle(radius=d/2, N=points)
+    with nd.Cell('hole') as cell:
+        nd.Polygon(points=hole_shape, layer=layer).put(-9600,-6000)
+    return cell
+
+for x in range(0,2):
+  # Waveguide 1
+  # plot for each placement of holes
+  hole1(layer=1).put(((x*s)*b/2)+(p*1), c*a, array=[9, [b, 0], l, [0, a]])
+  hole1(layer=1).put(((x*s+1)*b/2)+(p*1), m*a, array=[8, [b, 0], l, [0, a]])
+  # plot the other PhC mirror, 5 holes away
+  hole1(layer=1).put((((x*s)+d)*b/2)+(p*1), c*a, array=[9, [b, 0], l, [0, a]])
+  hole1(layer=1).put((((x*s)+(d+1))*b/2)+(p*1), m*a, array=[8, [b, 0], l, [0, a]])
+  
+# create a marker cross
+def cross(thickness=100, width=1000, aspect=1, nameWg='Cross'): # make changes here
+    with nd.Cell(name=nameWg) as mycp:
+        pointsCross = ([-width/2.0, thickness/2.0],
+                       [-thickness/2.0, thickness/2.0],
+                       [-thickness/2.0, width/2.0],
+                       [thickness/2.0, width/2.0],
+                       [thickness/2.0, thickness/2.0],
+                       [width/2.0, thickness/2.0],
+                       [width/2.0, -thickness/2.0],
+                       [thickness/2.0, -thickness/2.0],
+                       [thickness/2.0, -width/2.0],
+                       [-thickness/2.0, -width/2.0],
+                       [-thickness/2.0, -thickness/2.0],
+                       [-width/2.0, -thickness/2.0]
+                      )
+        
+        nd.Polygon(points=pointsCross, layer = 3).put()   
+    return mycp
+
+cross().put(5025,11000)
+cross().put(-5025,11000)
+cross().put(5025,-11000)
+cross().put(-5025,-11000)
+
+cross().put(11000,5079)
+cross().put(11000,-5079)
+cross().put(-11000,5079)
+cross().put(-11000,-5079)
+
+#circle.put()
+nd.export_gds(filename='40mm.gds')
