@@ -1,0 +1,61 @@
+import math
+import meep as mp
+from meep import mpb
+
+a = 2 #um
+supercell_y = 39  # the (odd) number of lateral supercell periods
+supercell_z = 4 # vertical supercell periods
+
+h = 0.5 #um
+r = 0.8/a #the radius of the holes in units of a (r/a)
+h = h/a # thickness of the  in units of a
+
+n = 2.0935 # the refractive index of the slab
+
+# triangular lattice with vertical supercell:
+geometry_lattice = mp.Lattice(size=mp.Vector3(1, supercell_y, supercell_z),
+                              basis1=mp.Vector3(0.5, math.sqrt(3)/2),
+                              basis2=mp.Vector3(0.5, -math.sqrt(3)/2),
+                              basis3=mp.Vector3(0, 0, 1))
+# set the material for the slab
+default_material = mp.Medium(index=n)
+# create a hole with radius r
+hole = [mp.Cylinder(material=mp.air, center=mp.Vector3(), radius=r, height=mp.inf)]
+# duplicate the air rods over the supercell:
+geometry = mp.geometric_objects_lattice_duplicates(geometry_lattice, hole)
+
+# add a rod of material, to erase a row of holes and form a waveguide:
+geometry += [mp.Cylinder(center=mp.Vector3(), radius=r, material=mp.Medium(index=n), height=h)]
+geometry += [mp.Cylinder(r, center=mp.Vector3(-1, -1), material=mp.Medium(index=n), height=h)]
+geometry += [mp.Cylinder(r, center=mp.Vector3(1, -1), material=mp.Medium(index=n), height=h)]
+geometry += [mp.Cylinder(r, center=mp.Vector3(1, 1), material=mp.Medium(index=n), height=h)]
+geometry += [mp.Cylinder(r, center=mp.Vector3(-1, 1), material=mp.Medium(index=n), height=h)]
+geometry += [mp.Cylinder(r, center=mp.Vector3(0, -2), material=mp.Medium(index=n), height=h)]
+geometry += [mp.Cylinder(r, center=mp.Vector3(0, 2), material=mp.Medium(index=n), height=h)]
+
+# cladding height
+ch = (supercell_z/2)-(h/2)
+# cladding center
+cc = (supercell_z/4)+(h/4)
+# cladding (air)
+geometry += [(mp.Block(center=mp.Vector3(0, 0, cc), material=mp.air, size=mp.Vector3(mp.inf, mp.inf, ch))),
+             (mp.Block(center=mp.Vector3(0, 0, -cc), material=mp.air, size=mp.Vector3(mp.inf, mp.inf, ch)))]
+
+#1st Brillouin zone of a triangular lattice in wg:
+Gamma = mp.lattice_to_reciprocal(mp.Vector3(0.45), geometry_lattice)
+K = mp.lattice_to_reciprocal(mp.Vector3(0.5), geometry_lattice)
+k_interp=32
+k_points=mp.interpolate(k_interp, [Gamma, K])
+    
+resolution = mp.Vector3(32, 32, 16)
+num_bands = 15
+
+ms = mpb.ModeSolver(default_material=default_material,
+                    num_bands=num_bands,
+                    k_points=k_points,
+                    geometry=geometry,
+                    geometry_lattice=geometry_lattice,
+                    resolution=resolution)
+
+ms.run_tm() # if you want to see the field at K points (mpb.output_at_kpoint(K), mpb.fix_efield_phase, mpb.output_efield_z)
+ms.output_epsilon()
