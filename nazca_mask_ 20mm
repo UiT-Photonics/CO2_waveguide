@@ -38,15 +38,6 @@ cloth3 = spi.Clothoid_order3(x0_in, y0_in,
                              k1_in, dk1_in, th1_in
                              )
 
-# generate the etch holes; rectangular pattern
-def rectPattern(length, width):
-    holePattern = np.array([[-width/2.0, -length/2.0],
-                      [-width/2.0, length/2.0],
-                      [width/2.0, length/2.0],
-                      [width/2.0, -length/2.0]              
-                    ])
-    return holePattern
-
 
 
 # generate the etch holes, circular pattern
